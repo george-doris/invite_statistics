@@ -198,8 +198,8 @@ private:
     CNode<KeyType> *m_Childs[MAXNUM_CHILD];
 };
 
-template<typename KeyType, typename DataType>
 // 叶子结点
+template<typename KeyType, typename DataType>
 class CLeafNode : public CNode<KeyType> {
 public:
     CLeafNode() : CNode<KeyType>() {
