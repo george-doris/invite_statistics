@@ -116,17 +116,19 @@ public:
     }
 
     virtual void split(CNode<KeyType> *parentNode, int32_t childIndex) {
-        CInternalNode *newNode = new CInternalNode();//分裂后的右节点
+        CInternalNode *newNode = new CInternalNode();   //分裂后的右节点
         newNode->setKeyNum(MINNUM_KEY);
         int32_t i;
-        for (i = 0; i < MINNUM_KEY; ++i)// 拷贝关键字的值
-        {
+        // 拷贝关键字的值
+        for (i = 0; i < MINNUM_KEY; ++i) {
             newNode->setKeyValue(i, CNode<KeyType>::m_KeyValues[i + MINNUM_CHILD]);
         }
-        for (i = 0; i < MINNUM_CHILD; ++i) // 拷贝孩子节点指针
-        {
+
+        // 拷贝孩子节点指针
+        for (i = 0; i < MINNUM_CHILD; ++i) {
             newNode->setChild(i, m_Childs[i + MINNUM_CHILD]);
         }
+        
         CNode<KeyType>::setKeyNum(MINNUM_KEY);  //更新左子树的关键字个数
         ((CInternalNode *) parentNode)->insert(childIndex, childIndex + 1, CNode<KeyType>::m_KeyValues[MINNUM_KEY], newNode);
     }
