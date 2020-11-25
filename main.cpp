@@ -2,20 +2,11 @@
 #include <string>
 #include <algorithm>
 #include <vector>
+#include <list>
 
 #define MAXVEX 10
 
 using Status = int32_t;
-
-// 结点类型：内结点、叶子结点
-enum NODE_TYPE {
-    INTERNAL, LEAF
-};
-
-// 兄弟结点方向：左兄弟结点、右兄弟结点
-enum SIBLING_DIRECTION {
-    LEFT, RIGHT
-};
 
 //using KeyType = int32_t;                        // 键类型
 //using DataType = int32_t;                       // 值类型
@@ -28,16 +19,26 @@ const int32_t MAXNUM_CHILD = MAXNUM_KEY + 1;    // 最大子树个数
 const int32_t MINNUM_LEAF = MINNUM_KEY;         // 最小叶子结点键值个数
 const int32_t MAXNUM_LEAF = MAXNUM_KEY;         // 最大叶子结点键值个数
 
+// 结点类型：内结点、叶子结点
+enum NODE_TYPE {
+    INTERNAL, LEAF
+};
+
+// 兄弟结点方向：左兄弟结点、右兄弟结点
+enum SIBLING_DIRECTION {
+    LEFT, RIGHT
+};
+
 // 结点基类
 template<typename KeyType>
-class CNode {
+class BaseNode {
 public:
-    CNode() {
+    BaseNode() {
         setType(LEAF);
         setKeyNum(0);
     }
 
-    virtual ~CNode() {
+    virtual ~BaseNode() {
         setKeyNum(0);
     }
 
@@ -72,11 +73,11 @@ public:
 
     // 纯虚函数，定义接口
     virtual void removeKey(int32_t keyIndex, int32_t childIndex) = 0;  // 从结点中移除键值
-    virtual void split(CNode *parentNode, int32_t childIndex) = 0; // 分裂结点
-    virtual void mergeChild(CNode *parentNode, CNode *childNode, int32_t keyIndex) = 0;  // 合并结点
+    virtual void split(BaseNode *parentNode, int32_t childIndex) = 0; // 分裂结点
+    virtual void mergeChild(BaseNode *parentNode, BaseNode *childNode, int32_t keyIndex) = 0;  // 合并结点
     virtual void clear() = 0; // 清空结点，同时会清空结点所包含的子树结点
     virtual void
-    borrowFrom(CNode *destNode, CNode *parentNode, int32_t keyIndex, SIBLING_DIRECTION d) = 0; // 从兄弟结点中借一个键值
+    borrowFrom(BaseNode *destNode, BaseNode *parentNode, int32_t keyIndex, SIBLING_DIRECTION d) = 0; // 从兄弟结点中借一个键值
     virtual int32_t getChildIndex(KeyType key, int32_t keyIndex) const = 0;  // 根据键值获取孩子结点指针下标
 protected:
     NODE_TYPE m_Type;
@@ -86,97 +87,97 @@ protected:
 
 // 内结点
 template<typename KeyType>
-class CInternalNode : public CNode<KeyType> {
+class InternalNode : public BaseNode<KeyType> {
 public:
-    CInternalNode() : CNode<KeyType>() {
-        CNode<KeyType>::setType(INTERNAL);
+    InternalNode() : BaseNode<KeyType>() {
+        BaseNode<KeyType>::setType(INTERNAL);
     }
 
-    virtual ~CInternalNode() {
+    virtual ~InternalNode() {
 
     }
 
-    CNode<KeyType> *getChild(int32_t i) const { return m_Childs[i]; }
+    BaseNode<KeyType> *getChild(int32_t i) const { return m_Childs[i]; }
 
-    void setChild(int32_t i, CNode<KeyType> *child) { m_Childs[i] = child; }
+    void setChild(int32_t i, BaseNode<KeyType> *child) { m_Childs[i] = child; }
 
-    void insert(int32_t keyIndex, int32_t childIndex, KeyType key, CNode<KeyType> *childNode) {
+    void insert(int32_t keyIndex, int32_t childIndex, KeyType key, BaseNode<KeyType> *childNode) {
         int32_t i;
-        for (i = CNode<KeyType>::getKeyNum(); i > keyIndex; --i)//将父节点中的childIndex后的所有关键字的值和子树指针向后移一位
+        for (i = BaseNode<KeyType>::getKeyNum(); i > keyIndex; --i)//将父节点中的childIndex后的所有关键字的值和子树指针向后移一位
         {
             setChild(i + 1, m_Childs[i]);
-            setKeyValue(i, CNode<KeyType>::m_KeyValues[i - 1]);
+            this->setKeyValue(i, BaseNode<KeyType>::m_KeyValues[i - 1]);
         }
         if (i == childIndex) {
             setChild(i + 1, m_Childs[i]);
         }
         setChild(childIndex, childNode);
-        setKeyValue(keyIndex, key);
-        setKeyNum(CNode<KeyType>::m_KeyNum + 1);
+        this->setKeyValue(keyIndex, key);
+        this->setKeyNum(BaseNode<KeyType>::m_KeyNum + 1);
     }
 
-    virtual void split(CNode<KeyType> *parentNode, int32_t childIndex) {
-        CInternalNode *newNode = new CInternalNode();   //分裂后的右节点
+    virtual void split(BaseNode<KeyType> *parentNode, int32_t childIndex) {
+        InternalNode *newNode = new InternalNode();   //分裂后的右节点
         newNode->setKeyNum(MINNUM_KEY);
         int32_t i;
         // 拷贝关键字的值
         for (i = 0; i < MINNUM_KEY; ++i) {
-            newNode->setKeyValue(i, CNode<KeyType>::m_KeyValues[i + MINNUM_CHILD]);
+            newNode->setKeyValue(i, BaseNode<KeyType>::m_KeyValues[i + MINNUM_CHILD]);
         }
 
         // 拷贝孩子节点指针
         for (i = 0; i < MINNUM_CHILD; ++i) {
             newNode->setChild(i, m_Childs[i + MINNUM_CHILD]);
         }
-        
-        CNode<KeyType>::setKeyNum(MINNUM_KEY);  //更新左子树的关键字个数
-        ((CInternalNode *) parentNode)->insert(childIndex, childIndex + 1, CNode<KeyType>::m_KeyValues[MINNUM_KEY], newNode);
+
+        BaseNode<KeyType>::setKeyNum(MINNUM_KEY);  //更新左子树的关键字个数
+        ((InternalNode *) parentNode)->insert(childIndex, childIndex + 1, BaseNode<KeyType>::m_KeyValues[MINNUM_KEY], newNode);
     }
 
-    virtual void mergeChild(CNode<KeyType> *parentNode, CNode<KeyType> *childNode, int32_t keyIndex) {
+    virtual void mergeChild(BaseNode<KeyType> *parentNode, BaseNode<KeyType> *childNode, int32_t keyIndex) {
         // 合并数据
         insert(MINNUM_KEY, MINNUM_KEY + 1, parentNode->getKeyValue(keyIndex),
-               ((CInternalNode *) childNode)->getChild(0));
+               ((InternalNode *) childNode)->getChild(0));
         int32_t i;
         for (i = 1; i <= childNode->getKeyNum(); ++i) {
             insert(MINNUM_KEY + i, MINNUM_KEY + i + 1, childNode->getKeyValue(i - 1),
-                   ((CInternalNode *) childNode)->getChild(i));
+                   ((InternalNode *) childNode)->getChild(i));
         }
         //父节点删除index的key
         parentNode->removeKey(keyIndex, keyIndex + 1);
-        delete ((CInternalNode *) parentNode)->getChild(keyIndex + 1);
+        delete ((InternalNode *) parentNode)->getChild(keyIndex + 1);
     }
 
     virtual void removeKey(int32_t keyIndex, int32_t childIndex) {
-        for (int32_t i = 0; i < CNode<KeyType>::getKeyNum() - keyIndex - 1; ++i) {
-            setKeyValue(keyIndex + i, CNode<KeyType>::getKeyValue(keyIndex + i + 1));
+        for (int32_t i = 0; i < BaseNode<KeyType>::getKeyNum() - keyIndex - 1; ++i) {
+            this->setKeyValue(keyIndex + i, BaseNode<KeyType>::getKeyValue(keyIndex + i + 1));
             setChild(childIndex + i, getChild(childIndex + i + 1));
         }
-        setKeyNum(CNode<KeyType>::getKeyNum() - 1);
+        this->setKeyNum(BaseNode<KeyType>::getKeyNum() - 1);
     }
 
     virtual void clear() {
-        for (int32_t i = 0; i <= CNode<KeyType>::m_KeyNum; ++i) {
+        for (int32_t i = 0; i <= BaseNode<KeyType>::m_KeyNum; ++i) {
             m_Childs[i]->clear();
             delete m_Childs[i];
             m_Childs[i] = nullptr;
         }
     }
 
-    virtual void borrowFrom(CNode<KeyType> *siblingNode, CNode<KeyType> *parentNode, int32_t keyIndex, SIBLING_DIRECTION d) {
+    virtual void borrowFrom(BaseNode<KeyType> *siblingNode, BaseNode<KeyType> *parentNode, int32_t keyIndex, SIBLING_DIRECTION d) {
         switch (d) {
             case LEFT:  // 从左兄弟结点借
             {
                 insert(0, 0, parentNode->getKeyValue(keyIndex),
-                       ((CInternalNode *) siblingNode)->getChild(siblingNode->getKeyNum()));
+                       ((InternalNode *) siblingNode)->getChild(siblingNode->getKeyNum()));
                 parentNode->setKeyValue(keyIndex, siblingNode->getKeyValue(siblingNode->getKeyNum() - 1));
                 siblingNode->removeKey(siblingNode->getKeyNum() - 1, siblingNode->getKeyNum());
             }
                 break;
             case RIGHT:  // 从右兄弟结点借
             {
-                insert(CNode<KeyType>::getKeyNum(), CNode<KeyType>::getKeyNum() + 1, parentNode->getKeyValue(keyIndex),
-                       ((CInternalNode *) siblingNode)->getChild(0));
+                insert(BaseNode<KeyType>::getKeyNum(), BaseNode<KeyType>::getKeyNum() + 1, parentNode->getKeyValue(keyIndex),
+                       ((InternalNode *) siblingNode)->getChild(0));
                 parentNode->setKeyValue(keyIndex, siblingNode->getKeyValue(0));
                 siblingNode->removeKey(0, 0);
             }
@@ -187,7 +188,7 @@ public:
     }
 
     virtual int32_t getChildIndex(KeyType key, int32_t keyIndex) const {
-        if (key == CNode<KeyType>::getKeyValue(keyIndex)) {
+        if (key == BaseNode<KeyType>::getKeyValue(keyIndex)) {
             return keyIndex + 1;
         } else {
             return keyIndex;
@@ -195,30 +196,30 @@ public:
     }
 
 private:
-    CNode<KeyType> *m_Childs[MAXNUM_CHILD];
+    BaseNode<KeyType> *m_Childs[MAXNUM_CHILD];
 };
 
 // 叶子结点
 template<typename KeyType, typename DataType>
-class CLeafNode : public CNode<KeyType> {
+class LeafNode : public BaseNode<KeyType> {
 public:
-    CLeafNode() : CNode<KeyType>() {
-        CNode<KeyType>::setType(LEAF);
+    LeafNode() : BaseNode<KeyType>() {
+        BaseNode<KeyType>::setType(LEAF);
         setLeftSibling(nullptr);
         setRightSibling(nullptr);
     }
 
-    virtual ~CLeafNode() {
+    virtual ~LeafNode() {
 
     }
 
-    CLeafNode *getLeftSibling() const { return m_LeftSibling; }
+    LeafNode *getLeftSibling() const { return m_LeftSibling; }
 
-    void setLeftSibling(CLeafNode *node) { m_LeftSibling = node; }
+    void setLeftSibling(LeafNode *node) { m_LeftSibling = node; }
 
-    CLeafNode *getRightSibling() const { return m_RightSibling; }
+    LeafNode *getRightSibling() const { return m_RightSibling; }
 
-    void setRightSibling(CLeafNode *node) { m_RightSibling = node; }
+    void setRightSibling(LeafNode *node) { m_RightSibling = node; }
 
     DataType getData(int32_t i) const { return m_Datas[i]; }
 
@@ -226,18 +227,18 @@ public:
 
     void insert(KeyType key, const DataType &data) {
         int32_t i;
-        for (i = CNode<KeyType>::m_KeyNum; i >= 1 && CNode<KeyType>::m_KeyValues[i - 1] > key; --i) {
-            setKeyValue(i, CNode<KeyType>::m_KeyValues[i - 1]);
+        for (i = BaseNode<KeyType>::m_KeyNum; i >= 1 && BaseNode<KeyType>::m_KeyValues[i - 1] > key; --i) {
+            this->setKeyValue(i, BaseNode<KeyType>::m_KeyValues[i - 1]);
             setData(i, m_Datas[i - 1]);
         }
-        setKeyValue(i, key);
+        this->setKeyValue(i, key);
         setData(i, data);
-        setKeyNum(CNode<KeyType>::m_KeyNum + 1);
+        this->setKeyNum(BaseNode<KeyType>::m_KeyNum + 1);
     }
 
-    virtual void split(CNode<KeyType> *parentNode, int32_t childIndex) {
-        CLeafNode *newNode = new CLeafNode();//分裂后的右节点
-        CNode<KeyType>::setKeyNum(MINNUM_LEAF);
+    virtual void split(BaseNode<KeyType> *parentNode, int32_t childIndex) {
+        LeafNode *newNode = new LeafNode();//分裂后的右节点
+        BaseNode<KeyType>::setKeyNum(MINNUM_LEAF);
         newNode->setKeyNum(MINNUM_LEAF + 1);
         newNode->setRightSibling(getRightSibling());
         setRightSibling(newNode);
@@ -245,31 +246,31 @@ public:
         int32_t i;
         for (i = 0; i < MINNUM_LEAF + 1; ++i)// 拷贝关键字的值
         {
-            newNode->setKeyValue(i, CNode<KeyType>::m_KeyValues[i + MINNUM_LEAF]);
+            newNode->setKeyValue(i, BaseNode<KeyType>::m_KeyValues[i + MINNUM_LEAF]);
         }
         for (i = 0; i < MINNUM_LEAF + 1; ++i)// 拷贝数据
         {
             newNode->setData(i, m_Datas[i + MINNUM_LEAF]);
         }
-        ((CInternalNode<KeyType> *) parentNode)->insert(childIndex, childIndex + 1, CNode<KeyType>::m_KeyValues[MINNUM_LEAF], newNode);
+        ((InternalNode<KeyType> *) parentNode)->insert(childIndex, childIndex + 1, BaseNode<KeyType>::m_KeyValues[MINNUM_LEAF], newNode);
     }
 
-    virtual void mergeChild(CNode<KeyType> *parentNode, CNode<KeyType> *childNode, int32_t keyIndex) {
+    virtual void mergeChild(BaseNode<KeyType> *parentNode, BaseNode<KeyType> *childNode, int32_t keyIndex) {
         // 合并数据
         for (int32_t i = 0; i < childNode->getKeyNum(); ++i) {
-            insert(childNode->getKeyValue(i), ((CLeafNode *) childNode)->getData(i));
+            insert(childNode->getKeyValue(i), ((LeafNode *) childNode)->getData(i));
         }
-        setRightSibling(((CLeafNode *) childNode)->getRightSibling());
+        setRightSibling(((LeafNode *) childNode)->getRightSibling());
         //父节点删除index的key，
         parentNode->removeKey(keyIndex, keyIndex + 1);
     }
 
     virtual void removeKey(int32_t keyIndex, int32_t childIndex) {
-        for (int32_t i = keyIndex; i < CNode<KeyType>::getKeyNum() - 1; ++i) {
-            setKeyValue(i, CNode<KeyType>::getKeyValue(i + 1));
+        for (int32_t i = keyIndex; i < BaseNode<KeyType>::getKeyNum() - 1; ++i) {
+            this->setKeyValue(i, BaseNode<KeyType>::getKeyValue(i + 1));
             setData(i, getData(i + 1));
         }
-        setKeyNum(CNode<KeyType>::getKeyNum() - 1);
+        this->setKeyNum(BaseNode<KeyType>::getKeyNum() - 1);
     }
 
     virtual void clear() {
@@ -280,19 +281,19 @@ public:
 //        }
     }
 
-    virtual void borrowFrom(CNode<KeyType> *siblingNode, CNode<KeyType> *parentNode, int32_t keyIndex, SIBLING_DIRECTION d) {
+    virtual void borrowFrom(BaseNode<KeyType> *siblingNode, BaseNode<KeyType> *parentNode, int32_t keyIndex, SIBLING_DIRECTION d) {
         switch (d) {
             case LEFT:  // 从左兄弟结点借
             {
                 insert(siblingNode->getKeyValue(siblingNode->getKeyNum() - 1),
-                       ((CLeafNode *) siblingNode)->getData(siblingNode->getKeyNum() - 1));
+                       ((LeafNode *) siblingNode)->getData(siblingNode->getKeyNum() - 1));
                 siblingNode->removeKey(siblingNode->getKeyNum() - 1, siblingNode->getKeyNum() - 1);
-                parentNode->setKeyValue(keyIndex, CNode<KeyType>::getKeyValue(0));
+                parentNode->setKeyValue(keyIndex, BaseNode<KeyType>::getKeyValue(0));
             }
                 break;
             case RIGHT:  // 从右兄弟结点借
             {
-                insert(siblingNode->getKeyValue(0), ((CLeafNode *) siblingNode)->getData(0));
+                insert(siblingNode->getKeyValue(0), ((LeafNode *) siblingNode)->getData(0));
                 siblingNode->removeKey(0, 0);
                 parentNode->setKeyValue(keyIndex, siblingNode->getKeyValue(0));
             }
@@ -307,8 +308,8 @@ public:
     }
 
 private:
-    CLeafNode *m_LeftSibling;
-    CLeafNode *m_RightSibling;
+    LeafNode *m_LeftSibling;
+    LeafNode *m_RightSibling;
     DataType m_Datas[MAXNUM_LEAF];
 };
 
@@ -322,38 +323,32 @@ const int32_t INVALID_INDEX = -1;
 template<typename KeyType, typename DataType>
 struct SelectResult {
     int32_t keyIndex;
-    CLeafNode<KeyType, DataType> *targetNode;
+    LeafNode<KeyType, DataType> *targetNode;
 };
 
-
 template<typename KeyType, typename DataType>
-class CBPlusTree {
+class BPlusTree {
 public:
-    CBPlusTree() {
+    BPlusTree() {
         m_Root = nullptr;
         m_DataHead = nullptr;
     }
 
-    ~CBPlusTree() {
+    ~BPlusTree() {
         clear();
     }
 
     bool insert(KeyType key, const DataType &data) {
-        // 是否已经存在
-        if (search(key)) {
-            return false;
-        }
-
         // 找到可以插入的叶子结点，否则创建新的叶子结点
         if (m_Root == nullptr) {
-            m_Root = new CLeafNode<KeyType, DataType>();
-            m_DataHead = (CLeafNode<KeyType, DataType> *) m_Root;
+            m_Root = new LeafNode<KeyType, DataType>();
+            m_DataHead = (LeafNode<KeyType, DataType> *) m_Root;
             m_MaxKey = key;
         }
 
         if (m_Root->getKeyNum() >= MAXNUM_KEY) // 根结点已满，分裂
         {
-            CInternalNode<KeyType> *newNode = new CInternalNode<KeyType>();  //创建新的根节点
+            InternalNode<KeyType> *newNode = new InternalNode<KeyType>();  //创建新的根节点
             newNode->setChild(0, m_Root);
             m_Root->split(newNode, 0);    // 叶子结点分裂
             m_Root = newNode;  //更新根节点指针
@@ -380,8 +375,8 @@ public:
                 clear();
                 return true;
             } else {
-                CNode<KeyType> *pChild1 = ((CInternalNode<KeyType> *) m_Root)->getChild(0);
-                CNode<KeyType> *pChild2 = ((CInternalNode<KeyType> *) m_Root)->getChild(1);
+                BaseNode<KeyType> *pChild1 = ((InternalNode<KeyType> *) m_Root)->getChild(0);
+                BaseNode<KeyType> *pChild2 = ((InternalNode<KeyType> *) m_Root)->getChild(1);
                 if (pChild1->getKeyNum() == MINNUM_KEY && pChild2->getKeyNum() == MINNUM_KEY) {
                     pChild1->mergeChild(m_Root, pChild2, 0);
                     delete m_Root;
@@ -410,12 +405,12 @@ public:
     }
 
     // 定值查询，compareOperator可以是LT(<)、LE(<=)、EQ(=)、BE(>=)、BT(>)
-    std::vector<DataType> select(KeyType compareKey, int32_t compareOpeartor) {
+    std::vector<DataType> select(KeyType compareKey, COMPARE_OPERATOR compareOpeartor) {
         std::vector<DataType> results;
         if (m_Root != nullptr) {
             if (compareKey > m_MaxKey) {   // 比较键值大于B+树中最大的键值
                 if (compareOpeartor == LE || compareOpeartor == LT) {
-                    for (CLeafNode<KeyType, DataType> *itr = m_DataHead; itr != nullptr; itr = itr->getRightSibling()) {
+                    for (LeafNode<KeyType, DataType> *itr = m_DataHead; itr != nullptr; itr = itr->getRightSibling()) {
                         for (int32_t i = 0; i < itr->getKeyNum(); ++i) {
                             results.push_back(itr->getData(i));
                         }
@@ -423,7 +418,7 @@ public:
                 }
             } else if (compareKey < m_DataHead->getKeyValue(0)) {   // 比较键值小于B+树中最小的键值
                 if (compareOpeartor == BE || compareOpeartor == BT) {
-                    for (CLeafNode<KeyType, DataType> *itr = m_DataHead; itr != nullptr; itr = itr->getRightSibling()) {
+                    for (LeafNode<KeyType, DataType> *itr = m_DataHead; itr != nullptr; itr = itr->getRightSibling()) {
                         for (int32_t i = 0; i < itr->getKeyNum(); ++i) {
                             results.push_back(itr->getData(i));
                         }
@@ -435,7 +430,7 @@ public:
                 switch (compareOpeartor) {
                     case LT:
                     case LE: {
-                        CLeafNode<KeyType, DataType> *itr = m_DataHead;
+                        LeafNode<KeyType, DataType> *itr = m_DataHead;
                         int32_t i;
                         while (itr != result.targetNode) {
                             for (i = 0; i < itr->getKeyNum(); ++i) {
@@ -460,7 +455,7 @@ public:
                         break;
                     case BE:
                     case BT: {
-                        CLeafNode<KeyType, DataType> *itr = result.targetNode;
+                        LeafNode<KeyType, DataType> *itr = result.targetNode;
                         if (compareKey < itr->getKeyValue(result.keyIndex) ||
                             (compareOpeartor == BE && compareKey == itr->getKeyValue(result.keyIndex))
                                 ) {
@@ -484,18 +479,18 @@ public:
                 }
             }
         }
-        std::sort<std::vector<DataType>::iterator>(results.begin(), results.end());
+
         return results;
     }
 
     // 范围查询，BETWEEN
-    std::vector<DataType> select(KeyType smallKey, KeyType largeKey) {
+    void select(KeyType smallKey, KeyType largeKey, std::vector<DataType>& Result) {
         std::vector<DataType> results;
         if (smallKey <= largeKey) {
             SelectResult<KeyType, DataType> start, end;
             search(smallKey, start);
             search(largeKey, end);
-            CLeafNode<KeyType, DataType> *itr = start.targetNode;
+            LeafNode<KeyType, DataType> *itr = start.targetNode;
             int32_t i = start.keyIndex;
             if (itr->getKeyValue(i) < smallKey) {
                 ++i;
@@ -517,8 +512,6 @@ public:
                 results.push_back(itr->getData(i));
             }
         }
-        std::sort<std::vector<DataType>::iterator>(results.begin(), results.end());
-        return results;
     }
 
     // 查找是否存在
@@ -543,7 +536,7 @@ public:
 
     // 打印数据
     void printData() const {
-        CLeafNode<KeyType, DataType> *itr = m_DataHead;
+        LeafNode<KeyType, DataType> *itr = m_DataHead;
 
         while (itr != nullptr) {
             for (int32_t i = 0; i < itr->getKeyNum(); ++i) {
@@ -555,15 +548,15 @@ public:
     }
 
 private:
-    void recursive_insert(CNode<KeyType> *parentNode, KeyType key, const DataType &data) {
+    void recursive_insert(BaseNode<KeyType> *parentNode, KeyType key, const DataType &data) {
         // 叶子结点，直接插入
         if (parentNode->getType() == LEAF) {
-            ((CLeafNode<KeyType, DataType> *) parentNode)->insert(key, data);
+            ((LeafNode<KeyType, DataType> *) parentNode)->insert(key, data);
         } else {
             // 找到子结点
             int32_t keyIndex = parentNode->getKeyIndex(key);
             int32_t childIndex = parentNode->getChildIndex(key, keyIndex); // 孩子结点指针索引
-            CNode<KeyType> *childNode = ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex);
+            BaseNode<KeyType> *childNode = ((InternalNode<KeyType> *) parentNode)->getChild(childIndex);
 
             // 子结点已满，需进行分裂
             if (childNode->getKeyNum() >= MAXNUM_LEAF) {
@@ -571,14 +564,14 @@ private:
 
                 // 确定目标子结点
                 if (parentNode->getKeyValue(childIndex) <= key) {
-                    childNode = ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex + 1);
+                    childNode = ((InternalNode<KeyType> *) parentNode)->getChild(childIndex + 1);
                 }
             }
             recursive_insert(childNode, key, data);
         }
     }
 
-    void recursive_remove(CNode<KeyType> *parentNode, KeyType key) {
+    void recursive_remove(BaseNode<KeyType> *parentNode, KeyType key) {
         int32_t keyIndex = parentNode->getKeyIndex(key);
         int32_t childIndex = parentNode->getChildIndex(key, keyIndex); // 孩子结点指针索引
 
@@ -596,17 +589,17 @@ private:
             }
         } else {
             // 内结点
-            CNode<KeyType> *pChildNode = ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex); //包含key的子树根节点
+            BaseNode<KeyType> *pChildNode = ((InternalNode<KeyType> *) parentNode)->getChild(childIndex); //包含key的子树根节点
 
             // 包含关键字达到下限值，进行相关操作
             if (pChildNode->getKeyNum() == MINNUM_KEY) {
                 // 左兄弟节点
-                CNode<KeyType> *pLeft = childIndex > 0 ? ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex - 1)
-                                              : nullptr;
+                BaseNode<KeyType> *pLeft = childIndex > 0 ? ((InternalNode<KeyType> *) parentNode)->getChild(childIndex - 1)
+                                                          : nullptr;
 
                 // 右兄弟节点
-                CNode<KeyType> *pRight =
-                        childIndex < parentNode->getKeyNum() ? ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex + 1)
+                BaseNode<KeyType> *pRight =
+                        childIndex < parentNode->getKeyNum() ? ((InternalNode<KeyType> *) parentNode)->getChild(childIndex + 1)
                                                              : nullptr;
 
                 // 先考虑从兄弟结点中借
@@ -629,12 +622,12 @@ private:
         }
     }
 
-    void printInConcavo(CNode<KeyType> *pNode, int32_t count) const {
+    void printInConcavo(BaseNode<KeyType> *pNode, int32_t count) const {
         if (pNode != nullptr) {
             int32_t i, j;
             for (i = 0; i < pNode->getKeyNum(); ++i) {
                 if (pNode->getType() != LEAF) {
-                    printInConcavo(((CInternalNode<KeyType> *) pNode)->getChild(i), count - 2);
+                    printInConcavo(((InternalNode<KeyType> *) pNode)->getChild(i), count - 2);
                 }
                 for (j = count; j >= 0; --j) {
                     std::cout << "-";
@@ -642,12 +635,12 @@ private:
                 std::cout << pNode->getKeyValue(i) << std::endl;
             }
             if (pNode->getType() != LEAF) {
-                printInConcavo(((CInternalNode<KeyType> *) pNode)->getChild(i), count - 2);
+                printInConcavo(((InternalNode<KeyType> *) pNode)->getChild(i), count - 2);
             }
         }
     }
 
-    bool recursive_search(CNode<KeyType> *pNode, KeyType key) const {
+    bool recursive_search(BaseNode<KeyType> *pNode, KeyType key) const {
         // 检测节点指针是否为空，或该节点是否为叶子节点
         if (pNode == nullptr) {
             return false;
@@ -663,20 +656,20 @@ private:
                 if (pNode->getType() == LEAF) {
                     return false;
                 } else {
-                    return recursive_search(((CInternalNode<KeyType> *) pNode)->getChild(childIndex), key);
+                    return recursive_search(((InternalNode<KeyType> *) pNode)->getChild(childIndex), key);
                 }
             }
         }
     }
 
-    void changeKey(CNode<KeyType> *pNode, KeyType oldKey, KeyType newKey) {
+    void changeKey(BaseNode<KeyType> *pNode, KeyType oldKey, KeyType newKey) {
         if (pNode != nullptr && pNode->getType() != LEAF) {
             int32_t keyIndex = pNode->getKeyIndex(oldKey);
             if (keyIndex < pNode->getKeyNum() && oldKey == pNode->getKeyValue(keyIndex))  // 找到
             {
                 pNode->setKeyValue(keyIndex, newKey);
             } else {  // 继续找
-                changeKey(((CInternalNode<KeyType> *) pNode)->getChild(keyIndex), oldKey, newKey);
+                changeKey(((InternalNode<KeyType> *) pNode)->getChild(keyIndex), oldKey, newKey);
             }
         }
     }
@@ -685,15 +678,15 @@ private:
         recursive_search(m_Root, key, result);
     }
 
-    void recursive_search(CNode<KeyType> *pNode, KeyType key, SelectResult<KeyType, DataType> &result) {
+    void recursive_search(BaseNode<KeyType> *pNode, KeyType key, SelectResult<KeyType, DataType> &result) {
         int32_t keyIndex = pNode->getKeyIndex(key);
         int32_t childIndex = pNode->getChildIndex(key, keyIndex); // 孩子结点指针索引
         if (pNode->getType() == LEAF) {
             result.keyIndex = keyIndex;
-            result.targetNode = (CLeafNode<KeyType, DataType> *) pNode;
+            result.targetNode = (LeafNode<KeyType, DataType> *) pNode;
             return;
         } else {
-            return recursive_search(((CInternalNode<KeyType> *) pNode)->getChild(childIndex), key, result);
+            return recursive_search(((InternalNode<KeyType> *) pNode)->getChild(childIndex), key, result);
         }
     }
 
@@ -707,12 +700,12 @@ private:
         // 特殊情况处理
         if (m_Root->getKeyNum() == 1) {
             if (m_Root->getType() == LEAF) {
-                dataValue = ((CLeafNode<KeyType, DataType> *) m_Root)->getData(0);
+                dataValue = ((LeafNode<KeyType, DataType> *) m_Root)->getData(0);
                 clear();
                 return;
             } else {
-                CNode<KeyType> *pChild1 = ((CInternalNode<KeyType> *) m_Root)->getChild(0);
-                CNode<KeyType> *pChild2 = ((CInternalNode<KeyType> *) m_Root)->getChild(1);
+                BaseNode<KeyType> *pChild1 = ((InternalNode<KeyType> *) m_Root)->getChild(0);
+                BaseNode<KeyType> *pChild2 = ((InternalNode<KeyType> *) m_Root)->getChild(1);
                 if (pChild1->getKeyNum() == MINNUM_KEY && pChild2->getKeyNum() == MINNUM_KEY) {
                     pChild1->mergeChild(m_Root, pChild2, 0);
                     delete m_Root;
@@ -724,7 +717,7 @@ private:
         recursive_remove(m_Root, key, dataValue);
     }
 
-    void recursive_remove(CNode<KeyType> *parentNode, KeyType key, DataType &dataValue) {
+    void recursive_remove(BaseNode<KeyType> *parentNode, KeyType key, DataType &dataValue) {
         int32_t keyIndex = parentNode->getKeyIndex(key);
         int32_t childIndex = parentNode->getChildIndex(key, keyIndex); // 孩子结点指针索引
 
@@ -734,7 +727,7 @@ private:
                 m_MaxKey = parentNode->getKeyValue(keyIndex - 1);
             }
 
-            dataValue = ((CLeafNode<KeyType, DataType> *) parentNode)->getData(keyIndex);
+            dataValue = ((LeafNode<KeyType, DataType> *) parentNode)->getData(keyIndex);
             parentNode->removeKey(keyIndex, childIndex);  // 直接删除
 
             // 如果键值在内部结点中存在，也要相应的替换内部结点
@@ -743,14 +736,14 @@ private:
             }
         } else {
             // 内结点
-            CNode<KeyType> *pChildNode = ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex); //包含key的子树根节点
+            BaseNode<KeyType> *pChildNode = ((InternalNode<KeyType> *) parentNode)->getChild(childIndex); //包含key的子树根节点
 
             // 包含关键字达到下限值，进行相关操作
             if (pChildNode->getKeyNum() == MINNUM_KEY) {
-                CNode<KeyType> *pLeft = childIndex > 0 ? ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex - 1)
-                                              : nullptr;                       //左兄弟节点
-                CNode<KeyType> *pRight =
-                        childIndex < parentNode->getKeyNum() ? ((CInternalNode<KeyType> *) parentNode)->getChild(childIndex + 1)
+                BaseNode<KeyType> *pLeft = childIndex > 0 ? ((InternalNode<KeyType> *) parentNode)->getChild(childIndex - 1)
+                                                          : nullptr;                       //左兄弟节点
+                BaseNode<KeyType> *pRight =
+                        childIndex < parentNode->getKeyNum() ? ((InternalNode<KeyType> *) parentNode)->getChild(childIndex + 1)
                                                              : nullptr;//右兄弟节点
                 // 先考虑从兄弟结点中借
                 if (pLeft && pLeft->getKeyNum() > MINNUM_KEY) {
@@ -773,8 +766,8 @@ private:
     }
 
 private:
-    CNode<KeyType> *m_Root;
-    CLeafNode<KeyType, DataType> *m_DataHead;
+    BaseNode<KeyType> *m_Root;
+    LeafNode<KeyType, DataType> *m_DataHead;
     KeyType m_MaxKey;  // B+树中的最大键
 };
 
@@ -788,13 +781,13 @@ private:
     const int32_t INCREMENT_STEP = 10;    // 增长步长
 
     // 分配内存空间	0|malloc  1|realloc
-    void _AllocSpace(int32_t size = 0, int32_t type = 0) {
-        /*
-        .	分配内存空间
-        .	参数：
-        .	int32_t size: 列表大小（元素个数）
-        .	int32_t type: 0|malloc  1|realloc
-        */
+    /*
+    .	分配内存空间
+    .	参数：
+    .	int32_t size: 列表大小（元素个数）
+    .	int32_t type: 0|malloc  1|realloc
+    */
+    void _AllocSpace(int32_t isize = 0, int32_t type = 0) {
         //新分配的内存起始地址索引
         int32_t start = 0;
         //临时对象数组指针
@@ -802,14 +795,14 @@ private:
         //1.首次分配内存
         if (type == 0) {
             //this->arr = (ElemType **)malloc(size * sizeof(ElemType *));
-            this->arr = new ElemType *[size];    //参考指针数组，保持 new 与 delete 配对
+            this->arr = new ElemType *[isize];    //参考指针数组，保持 new 与 delete 配对
         }
             //2.重新分配内存
         else if (type == 1) {
             //this->arr = (ElemType **)realloc(this->arr, size * sizeof(ElemType *));
             //将原对象数组元素赋值到新数组中，并删除原数组
             p = this->arr;
-            this->arr = new ElemType *[size];
+            this->arr = new ElemType *[isize];
             //1.迁移。注此时 this->size 还是原来的大小
             for (int32_t i = 0; i < this->size; i++) {
                 this->arr[i] = p[i];
@@ -820,14 +813,14 @@ private:
             start = this->length;
         }
         //3.初始化新分配内存元素为 nullptr
-        for (int32_t i = start; i < size; i++) {
+        for (int32_t i = start; i < isize; i++) {
             *(this->arr + i) = nullptr;
         }
     }
 
     // 判断列表是否满
     bool _IsFull() {
-        return this->length == this->size ? true : false;
+        return this->length == this->size;
     }
 
 public:
@@ -933,22 +926,17 @@ public:
     }
 };
 
-// 全局数组，记录结点是否已补访问
-bool visited[MAXVEX];
-
 // 链队列 类模板定义
 template<typename ElemType>
 class LinkQueue {
-    /*
-        链队列
-    */
+    // 链队列
     struct Node {
         ElemType *data;
         Node *next;
     };
 private:
-    Node *front;    //队头指针
-    Node *rear;    //队尾指针
+    Node *front;    // 队头指针
+    Node *rear;    // 队尾指针
 public:
     // 无参构造
     LinkQueue() {
@@ -964,9 +952,9 @@ public:
     ~LinkQueue() {
         // 注：采用链头删除法
         Node *p;
-        //从front 头结点遍历到链尾
+        // 从front 头结点遍历到链尾
         int32_t i = 0;
-        //条件：尾结点 next == nullptr
+        // 条件：尾结点 next == nullptr
         while (this->front != nullptr) {
             p = this->front;
             this->front = this->front->next;
@@ -1091,7 +1079,9 @@ public:
         return this->top->data;
     }
 
-    bool Empty() { return this->top == nullptr ? true : false; }
+    bool Empty() {
+        return this->top == nullptr;
+    }
 };
 
 /*
@@ -1108,14 +1098,22 @@ private:
     // 边表结点
     using EdgeNode = struct EdgeNode {
         int32_t adjVex; // 邻接顶点所在表中下标ID
-        EdgeNode *next; // 指向下一条边
+//        EdgeNode *next; // 指向下一条边
+
+        static bool cmp(const EdgeNode &A, const EdgeNode &B){
+            return A.adjVex < B.adjVex; // 降序
+        }
     };
 
     // 顶点表结点
     using VertexNode = struct VertexNode {
         int32_t id; // 顶点ID
         int32_t preID;  // 前向节点
-        EdgeNode *pFirstEdge; // 指向第一条边
+        BPlusTree<int32_t, EdgeNode> *pEdgeTable; // 指向边表
+
+        static bool cmp(const VertexNode &A, const VertexNode &B){
+            return A.id < B.id; // 降序
+        }
     };
 
 public:
@@ -1127,36 +1125,42 @@ public:
 
 public:
     void addInviteRelationship(int32_t preID, int32_t newID) {
-        _addVexSet(preID, newID);
-
-        EdgeData * edge = new GraphAdjList::EdgeData{ preID, newID };
-        ObjArrayList<EdgeData> * edgesList = new ObjArrayList<EdgeData>();
-        edgesList->Add(edge);
-        _CreateDG(edgesList);
+        if (_addVexSet(preID, newID)) {
+            EdgeData * edge = new GraphAdjList::EdgeData{ preID, newID };
+            ObjArrayList<EdgeData> * edgesList = new ObjArrayList<EdgeData>();
+            edgesList->Add(edge);
+            _AddEdge(edgesList);
+        }
     }
 
 
 private:
     static const int32_t _MAX_VERTEX_NUM = 10;          // 支持最大顶点数
 
-    VertexNode vexs[_MAX_VERTEX_NUM];                   // 顶点表
-    int32_t vexs_visited[_MAX_VERTEX_NUM];              // 顶点访问标记数组：0|未访问 1|已访问
+    BPlusTree<int32_t, VertexNode> vexs;                // 顶点表
+    BPlusTree<int32_t, bool> vexs_visited;              // 顶点访问标记数组：0|未访问 1|已访问
+
     int32_t iVexNum; // 顶点个数
     int32_t iEdgeNum; // 边数
 
     // 创建顶点集合
-    void _addVexSet(int32_t preID, int32_t newID) {
+    bool _addVexSet(int32_t preID, int32_t newID) {
         // 顶点是否存在
-        if (_Locate(preID) == -1 || _Locate(newID) == -1) {
-            this->vexs[newID].id = newID;
-            this->vexs[newID].preID = preID;
-            this->vexs[newID].pFirstEdge = nullptr;
+        if (_Locate(preID) != -1) {
+            VertexNode vertexNode = { newID, preID, nullptr };
+
+            this->vexs.insert(newID, vertexNode);
+
             this->iVexNum++;
+
+            return true;
         }
+
+        return false;
     }
 
-    // 创建有向图
-    void _CreateDG(ObjArrayList<EdgeData> *edgesList) {
+    // 创建边
+    void _AddEdge(ObjArrayList<EdgeData> *edgesList) {
         // 初始化临时 边对象
         EdgeData * edgeData = nullptr;
         // 初始化 Tail Head 顶点下标索引
@@ -1176,54 +1180,46 @@ private:
 
     // 定位顶点元素位置
     int32_t _Locate(int32_t vertex) {
-
-        for (int32_t i = 0; i < this->_MAX_VERTEX_NUM; i++) {
-            if (vertex == this->vexs[i].id) {
-                return i;
-            }
+        if (this->vexs.search(vertex)) {
+            return vertex;
         }
 
         // std::cout << std::endl << "顶点[" << vertex << "]不存在。" << std::endl;
         return -1;
-
     }
 
     // 插入边
     void _InsertEdge(int32_t tail, int32_t head) {
         // 边结点指针：初始化为 弧尾 指向的第一个边
-        EdgeNode *pEdge = this->vexs[tail].pFirstEdge;
-        // 初始化 前一边结点的指针
-        EdgeNode *preEdge = nullptr;
-        // 重复边布尔值
-        bool exist = false;
+        auto vertexList = this->vexs.select(tail, EQ);
 
-        // 1.边的重复性校验
-        while (pEdge != nullptr) {
-            // 若已存在该边，则标记为 存在 true
-            if (pEdge->adjVex == head) {
-                exist = true;
-                break;
-            }
-            // 若不是该边，继续下一个边校验
-            preEdge = pEdge;
-            pEdge = pEdge->next;
+        if (vertexList.empty()) {
+            return;
         }
 
-        // 2.1.如果边存在，则跳过，不做插入
-        if (exist)
-            return;
+        VertexNode vertexNode = vertexList[0];
 
-        // 2.2.边不存在时，创建边
-        EdgeNode *newEdge = new EdgeNode();
-        newEdge->adjVex = head;
-        newEdge->next = nullptr;
+        if (vertexNode.pEdgeTable != nullptr) {
+            // 2.1.如果边存在，则跳过，不做插入
+            if (vertexNode.pEdgeTable->search(head)) {
+                return;
+            } else {
+                // 2.2.插入边
+                EdgeNode newEdge = { head };
 
-        // 3.1.插入第一条边
-        if (preEdge == nullptr) {
-            this->vexs[tail].pFirstEdge = newEdge;
+                vertexNode.pEdgeTable->insert(tail, newEdge);
+            }
         } else {
-            // 3.2.插入后序边
-            preEdge->next = newEdge;
+            // 3.1.边表不存在时，创建边表,插入边
+            EdgeNode newEdge = { head };
+            BPlusTree<int32_t, EdgeNode> *edges = new BPlusTree<int32_t, EdgeNode>; // 边表
+
+            edges->insert(tail, newEdge);
+
+            vertexNode.pEdgeTable = edges;
+
+            this->vexs.remove(vertexNode.id);
+            this->vexs.insert(vertexNode.id, vertexNode);
         }
 
         // 4.边 计数
@@ -1233,91 +1229,151 @@ private:
     // 删除边
     void _DeleteEdge(int32_t tail, int32_t head) {
         // 边结点指针：初始化为 弧尾 指向的第一个边
-        EdgeNode *p = this->vexs[tail].pFirstEdge;
+        auto vertexList = this->vexs.select(tail, EQ);
+
+        if (vertexList.empty()) {
+            return;
+        }
+
+        VertexNode vertexNode = vertexList[0];
+
         // 初始化 前一边结点的指针
         EdgeNode *q = nullptr;
 
-        // 1.遍历查找边
-        while (p != nullptr) {
-            // 若存在该边，则结束循环
-            if (p->adjVex == head) {
-                break;
-            }
-            // 若不是该边，继续下一个边
-            q = p;
-            p = p->next;
+        // 1.查找边
+        if (vertexNode.pEdgeTable == nullptr) {
+            return;
         }
 
-        // 2.1.边不存在
-        if (p == nullptr) {
-            std::cout << std::endl << "边[" << this->vexs[head].id << "->" << this->vexs[head].id << "]不存在。"
+        // 若存不在该边，则结束
+        if (!vertexNode.pEdgeTable->search(head)) {
+            // 2.1.边不存在
+            std::cout << std::endl << "边[" << tail << "->" << head << "]不存在。"
                       << std::endl;
             return;
         }
 
         // 2.2.边存在，删除边
-        // 2.2.1.若为第一条边
-        if (q == nullptr) {
-            this->vexs[tail].pFirstEdge = p->next;
-        }
-            // 2.2.2.非第一条边
-        else {
-            q->next = p->next;
-        }
-        // 3.释放 p
-        delete p;
+        vertexNode.pEdgeTable->remove(head);
     }
 
     // 深度优先遍历 递归
     void _DFS_R(int32_t index) {
         // 1.访问顶点，并标记已访问
-        std::cout << this->vexs[index].id << " ";
-        this->vexs_visited[index] = 1;
+        auto vertexList = this->vexs.select(index, EQ);
+
+        if (vertexList.empty()) {
+            return;
+        }
+
+        VertexNode vertexNode = vertexList[0];
+
+        std::cout << vertexNode.id << " ";
+        this->vexs_visited.remove(vertexNode.id);
+        this->vexs_visited.insert(vertexNode.id, 1);
 
         // 2.遍历访问其相邻顶点
-        EdgeNode *p = this->vexs[index].pFirstEdge;
+        BPlusTree<int32_t, EdgeNode> *pEdges = vertexNode.pEdgeTable;
         int32_t adjVex = 0;
-        while (p != nullptr) {
-            adjVex = p->adjVex;
-            p = p->next;
+
+        if (pEdges == nullptr) {
+            return;
+        }
+
+        auto edgeList = pEdges->select(0, BE);
+
+        if (edgeList.empty()) {
+            return;
+        }
+
+        for (auto edge : edgeList) {
+            adjVex = edge.adjVex;
             // 当顶点未被访问过时，可访问
-            if (this->vexs_visited[adjVex] != 1) {
+            auto visited = this->vexs_visited.select(adjVex, EQ);
+            if (visited.empty()) {
+                continue;
+            }
+
+            if (visited[0] != true) {
                 _DFS_R(adjVex);
             }
         }
     }
 
-    // 深度优先遍历 非递归
-    void _DFS(int32_t index) {
-        // 1.访问第一个结点，并标记为 已访问
-        std::cout << this->vexs[index].id << " ";
-        vexs_visited[index] = 1;
-        // 初始化 边结点 栈
-        LinkStack<EdgeNode> *s = new LinkStack<EdgeNode>();
-        //初始化边结点 指针
-        EdgeNode *pEdge = this->vexs[index].pFirstEdge;
-        //2.寻找下一个（未访问的）邻接结点
-        while (!s->Empty() || pEdge != NULL) {
-            //2.1.未访问过，则访问 （纵向遍历）
-            if (vexs_visited[pEdge->adjVex] != 1) {
-                //访问结点，标记为访问，并将其入栈
-                std::cout << this->vexs[pEdge->adjVex].id << " ";
-                vexs_visited[pEdge->adjVex] = 1;
-                s->Push(pEdge);
-                //指针 p 移向 此结点的第一个邻接结点
-                pEdge = this->vexs[pEdge->adjVex].pFirstEdge;
-            }
-                //2.2.已访问过，移向下一个边结点 （横向遍历）
-            else
-                pEdge = pEdge->next;
-            //3.若无邻接点，则返回上一结点层，并出栈边结点
-            if (pEdge == NULL) {
-                pEdge = s->Pop();
-            }
-        }
-        //释放 栈
-        delete s;
-    }
+//    // 深度优先遍历 非递归
+//    void _DFS(int32_t index) {
+//        // 1.访问第一个结点，并标记为 已访问
+//        auto vertexList = this->vexs.select(index, EQ);
+//
+//        if (vertexList.empty()) {
+//            return;
+//        }
+//
+//        VertexNode vertexNode = vertexList[0];
+//
+//        std::cout << vertexNode.id << " ";
+//
+//        this->vexs_visited.remove(vertexNode.id);
+//        this->vexs_visited.insert(vertexNode.id, 1);
+//
+//        // 初始化 边结点 栈
+//        LinkStack<std::list<EdgeNode>> *s = new LinkStack<std::list<EdgeNode>>();
+//        //初始化边结点 指针
+//        BPlusTree<int32_t, EdgeNode> *pEdges = vertexNode.pEdgeTable;
+//
+//        std::list<EdgeNode> *pEdgeList = nullptr;
+//
+//        //2.寻找下一个（未访问的）邻接结点
+//        while (!s->Empty() || pEdges != nullptr) {
+//            //2.1.未访问过，则访问 （纵向遍历）
+//
+//            auto tempSet = pEdges->select(0, BE);
+//
+//            if (pEdgeList->empty()) {
+//                return;
+//            }
+//
+//            pEdgeList = new std::list<EdgeNode>();
+//            pEdgeList->assign(tempSet.begin(), tempSet.end());
+//
+//            auto visited = this->vexs_visited.select(pEdgeList->front().adjVex, EQ);
+//
+//            if (visited.empty()) {
+//                continue;
+//            }
+//
+//            if (visited[0] != true) {
+//                //访问结点，标记为访问，并将其入栈
+//                auto vertexList = this->vexs.select(pEdgeList->front().adjVex, EQ);
+//
+//                if (vertexList.empty()) {
+//                    continue;
+//                }
+//
+//                VertexNode vertexNode = vertexList[0];
+//
+//                std::cout << vertexNode.id << " " << std::flush;
+//
+//                this->vexs_visited.remove(pEdgeList->front().adjVex);
+//                this->vexs_visited.insert(pEdgeList->front().adjVex, 1);
+//
+//                s->Push(pEdgeList);
+//
+//                pEdges = vertexNode.pEdgeTable;
+//            } else {
+//                pEdgeList->pop_front();
+//                if (pEdgeList->empty()) {
+//                    delete pEdgeList;
+//                }
+//            }
+//
+//            if (pEdges == nullptr) {
+//                pEdgeList = s->Pop();
+//            }
+//        }
+//        //释放 栈
+//        delete s;
+//    }
 
 public:
     // 构造函数：初始化图
@@ -1334,55 +1390,66 @@ public:
     // 初始化顶点、边数据为 图|网
     void Init() {
         // 1.创建顶点集
-        this->vexs[0].id = 0;
-        this->vexs[0].preID = -1;
-        this->vexs[0].pFirstEdge = nullptr;
-        this->iVexNum++;
+        VertexNode vertexNode = { 0, -1, nullptr };
+        this->vexs.insert(0, vertexNode);
     }
 
-    //插入边
-    void InsertEdge(const EdgeData &edgeData) {
-        // 初始化 Tail Head 顶点下标索引
-        int32_t tail = 0, head = 0;
-        tail = _Locate(edgeData.Tail);
-        head = _Locate(edgeData.Head);
-        // 根据图类型，插入边
-        _InsertEdge(tail, head);
-    }
-
-    // 删除边
-    void DeleteEdge(const EdgeData &edgeData) {
-        // 初始化 Tail Head 顶点下标索引
-        int32_t tail = 0, head = 0;
-        tail = _Locate(edgeData.Tail);
-        head = _Locate(edgeData.Head);
-
-        // 根据图类型，删除边
-        _DeleteEdge(tail, head);
-    }
+//    //插入边
+//    void InsertEdge(const EdgeData &edgeData) {
+//        // 初始化 Tail Head 顶点下标索引
+//        int32_t tail = 0, head = 0;
+//        tail = _Locate(edgeData.Tail);
+//        head = _Locate(edgeData.Head);
+//        // 根据图类型，插入边
+//        _InsertEdge(tail, head);
+//    }
+//
+//    // 删除边
+//    void DeleteEdge(const EdgeData &edgeData) {
+//        // 初始化 Tail Head 顶点下标索引
+//        int32_t tail = 0, head = 0;
+//        tail = _Locate(edgeData.Tail);
+//        head = _Locate(edgeData.Head);
+//
+//        // 根据图类型，删除边
+//        _DeleteEdge(tail, head);
+//    }
 
     // 显示 图
     void Display() {
         // 初始化边表结点指针
-        EdgeNode *pEdge = nullptr;
         std::cout << std::endl << "邻接表：" << std::endl;
 
         // 遍历顶点表
-        for (int32_t i = 0; i < this->_MAX_VERTEX_NUM; i++) {
-            // 空顶点（在删除顶点的操作后会出现此类情况）
-            if (this->vexs[i].id == -1) {
+        auto vertexList = this->vexs.select(0, BE);
+
+        if (vertexList.empty()) {
+            return;
+        }
+
+        for (auto vex : vertexList) {
+            // 输出顶点
+            std::cout << "[" << vex.id << "]" << vex.id << " ";
+
+            // 遍历输出边顶点
+            auto pEdges = vex.pEdgeTable;
+
+            if (pEdges == nullptr) {
+                std::cout << std::endl;
                 continue;
             }
 
-            // 输出顶点
-            std::cout << "[" << i << "]" << this->vexs[i].id << " ";
+            // 遍历顶点表
+            auto edgeList = pEdges->select(0, BE);
 
-            // 遍历输出边顶点
-            pEdge = this->vexs[i].pFirstEdge;
-            while (pEdge != nullptr) {
-                std::cout << "[" << pEdge->adjVex << "] ";
-                pEdge = pEdge->next;
+            if (edgeList.empty()) {
+                continue;
             }
+
+            for (auto edge : edgeList) {
+                std::cout << "[" << edge.adjVex << "] ";
+            }
+
             std::cout << std::endl;
         }
 
@@ -1395,9 +1462,15 @@ public:
         if (index == -1)
             return;
 
+        auto vertexList = this->vexs.select(0, BE);
+
+        if (vertexList.empty()) {
+            return;
+        }
+
         // 2.初始化顶点访问数组
-        for (int32_t i = 0; i < this->_MAX_VERTEX_NUM; i++) {
-            this->vexs_visited[i] = 0;
+        for (auto vex : vertexList) {
+            this->vexs_visited.insert(vex.id, 0);
         }
 
         // 3.深度优先遍历 递归
@@ -1405,22 +1478,29 @@ public:
         _DFS_R(index);
     }
 
-    // 从指定顶点开始，深度优先 非递归 遍历
-    void Display_DFS(int32_t vertex) {
-        // 1.判断顶点是否存在
-        int32_t index = _Locate(vertex);
-        if (index == -1)
-            return;
-
-        // 2.初始化顶点访问数组
-        for (int32_t i = 0; i < this->_MAX_VERTEX_NUM; i++) {
-            this->vexs_visited[i] = 0;
-        }
-
-        // 3.深度优先遍历 递归
-        std::cout << "深度优先遍历（非递归）：（从顶点" << vertex << "开始）" << std::endl;
-        _DFS(index);
-    }
+//    // 从指定顶点开始，深度优先 非递归 遍历
+//    void Display_DFS(int32_t vertex) {
+//        // 1.判断顶点是否存在
+//        int32_t index = _Locate(vertex);
+//        if (index == -1)
+//            return;
+//
+//        auto vertexList = this->vexs.select(0, BE);
+//
+//        if (vertexList.empty()) {
+//            return;
+//        }
+//
+//        // 2.初始化顶点访问数组
+//        for (auto vex : vertexList) {
+//            this->vexs_visited.remove(vex.id);
+//            this->vexs_visited.insert(vex.id, 0);
+//        }
+//
+//        // 3.深度优先遍历 递归
+//        std::cout << "深度优先遍历（非递归）：（从顶点" << vertex << "开始）" << std::endl;
+//        _DFS(index);
+//    }
 
     // 从指定顶点开始，广度优先遍历
     void Display_BFS(int32_t vertex) {
@@ -1429,39 +1509,95 @@ public:
         if (index == -1)
             return;
 
-        // 2.初始化顶点访问数组
-        for (int32_t i = 0; i < this->_MAX_VERTEX_NUM; i++) {
-            this->vexs_visited[i] = 0;
+        {
+            auto vertexList = this->vexs.select(0, BE);
+
+            if (vertexList.empty()) {
+                return;
+            }
+
+            // 2.初始化顶点访问数组
+            for (auto vex : vertexList) {
+                this->vexs_visited.remove(vex.id);
+                this->vexs_visited.insert(vex.id, 0);
+            }
         }
 
         // 3.广度优先遍历
         std::cout << "广度优先遍历：（从顶点" << vertex << "开始）" << std::endl;
 
         // 3.1.初始化队列
-        LinkQueue<int> * vexQ = new LinkQueue<int>();
+        LinkQueue<int32_t> * vexQ = new LinkQueue<int32_t>();
 
         // 3.2.访问开始顶点，并标记访问、入队
-        std::cout << this->vexs[index].id << " ";
-        this->vexs_visited[index] = 1;
+        auto vertexList = this->vexs.select(index, EQ);
+
+        if (vertexList.empty()) {
+            return;
+        }
+
+        VertexNode vertexNode = vertexList[0];
+
+        std::cout << vertexNode.id << " " << std::flush;
+
+        this->vexs_visited.remove(index);
+        this->vexs_visited.insert(index, 1);
         vexQ->EnQueue(new int32_t(index));
 
         // 3.3.出队，并遍历邻接顶点（下一层次），访问后入队
-        EdgeNode *pEdge = nullptr;
+        BPlusTree<int32_t, EdgeNode> *pEdges = nullptr;
         int32_t adjVex = 0;
         while (vexQ->GetHead() != nullptr) {
-            index = *vexQ->DeQueue();
-            pEdge = this->vexs[index].pFirstEdge;
+            {
+                index = *vexQ->DeQueue();
+                auto vertexList = this->vexs.select(index, EQ);
+
+                if (vertexList.empty()) {
+                    return;
+                }
+
+                VertexNode vertexNode = vertexList[0];
+
+                pEdges = vertexNode.pEdgeTable;
+
+                if (pEdges == nullptr) {
+                    continue;
+                }
+            }
+
             // 遍历邻接顶点
-            while (pEdge != nullptr) {
-                adjVex = pEdge->adjVex;
+            auto edgeList = pEdges->select(0, BE);
+
+            if (edgeList.empty()) {
+                return;
+            }
+
+            for (auto edge : edgeList) {
                 // 未访问过的邻接顶点
-                if (this->vexs_visited[adjVex] != 1) {
+                adjVex = edge.adjVex;
+                auto visited = this->vexs_visited.select(adjVex, EQ);
+
+                if (visited.empty()) {
+                    continue;
+                }
+
+                if (visited[0] != true) {
                     // 访问顶点，并标记访问、入队
-                    std::cout << this->vexs[adjVex].id << " ";
-                    this->vexs_visited[adjVex] = 1;
+                    auto vertexSetTemp = this->vexs.select(adjVex, EQ);
+
+                    if (vertexSetTemp.empty()) {
+                        return;
+                    }
+
+                    VertexNode vertexNode = vertexSetTemp[0];
+
+                    std::cout << vertexNode.id << " " << std::flush;
+
+                    this->vexs_visited.remove(adjVex);
+                    this->vexs_visited.insert(adjVex, 1);
+
                     vexQ->EnQueue(new int32_t(adjVex));
                 }
-                pEdge = pEdge->next;
             }
         }
 
@@ -1477,45 +1613,6 @@ public:
 };
 
 int32_t main() {
-    //初始化顶点数据
-    int32_t * id0 = new int32_t (0);
-    int32_t * id1 = new int32_t(1);
-    int32_t * id2 = new int32_t(2);
-    int32_t * id3 = new int32_t(3);
-    int32_t * id4 = new int32_t(4);
-    int32_t * id5 = new int32_t(5);
-    int32_t * id6 = new int32_t(6);
-    ObjArrayList<int32_t> * vexs = new ObjArrayList<int32_t>();
-    vexs->Add(id0);
-    vexs->Add(id1);
-    vexs->Add(id2);
-    vexs->Add(id3);
-    vexs->Add(id4);
-    vexs->Add(id5);
-    vexs->Add(id6);
-
-    //初始化边（弧）数据
-    GraphAdjList::EdgeData * edge1 = new GraphAdjList::EdgeData{ 1, 2 };
-    GraphAdjList::EdgeData * edge2 = new GraphAdjList::EdgeData{ 1, 3 };
-    GraphAdjList::EdgeData * edge3 = new GraphAdjList::EdgeData{ 1, 4 };
-    GraphAdjList::EdgeData * edge4 = new GraphAdjList::EdgeData{ 3, 1 };
-    GraphAdjList::EdgeData * edge5 = new GraphAdjList::EdgeData{ 3, 2 };
-    GraphAdjList::EdgeData * edge6 = new GraphAdjList::EdgeData{ 3, 5 };
-    GraphAdjList::EdgeData * edge7 = new GraphAdjList::EdgeData{ 2, 5 };
-    GraphAdjList::EdgeData * edge8 = new GraphAdjList::EdgeData{ 4, 6 };
-    GraphAdjList::EdgeData * edge9 = new GraphAdjList::EdgeData{ 4, 7 };
-    GraphAdjList::EdgeData * edge10 = new GraphAdjList::EdgeData{ 6, 7 };
-    ObjArrayList<GraphAdjList::EdgeData> * edgesList = new ObjArrayList<GraphAdjList::EdgeData>();
-    edgesList->Add(edge1);
-    edgesList->Add(edge2);
-    edgesList->Add(edge3);
-    edgesList->Add(edge4);
-    edgesList->Add(edge5);
-    edgesList->Add(edge6);
-    edgesList->Add(edge7);
-    edgesList->Add(edge8);
-    edgesList->Add(edge9);
-    edgesList->Add(edge10);
 
     // 测试1：无向图
     std::cout << std::endl << "图初始化：" << std::endl;
@@ -1526,43 +1623,28 @@ int32_t main() {
     dg->addInviteRelationship(1, 2);
     dg->addInviteRelationship(0, 3);
     dg->addInviteRelationship(3, 4);
+    dg->addInviteRelationship(4, 5);
+    dg->addInviteRelationship(4, 6);
+    dg->addInviteRelationship(4, 7);
+    dg->addInviteRelationship(2, 8);
 
     dg->Display();
+
+    int32_t * id0 = new int32_t (0);
+    int32_t * id1 = new int32_t (4);
 
     // 1.1.深度优先遍历
     std::cout << std::endl << "图深度优先遍历序列：（递归）" << std::endl;
     dg->Display_DFS_R(*id0);
 
-    std::cout << std::endl << std::endl << "图深度优先遍历序列：（非递归）" << std::endl;
-    dg->Display_DFS(*id0);
-
     // 1.2.广度优先遍历
     std::cout << std::endl << std::endl << "图广度优先遍历序列：" << std::endl;
-    dg->Display_BFS(*id1);
+    dg->Display_BFS(*id0);
 
     // 1.3.插入新边
     std::cout << std::endl << std::endl << "新边：" << std::endl;
-    dg->addInviteRelationship(3, 5);
+    dg->addInviteRelationship(7, 9);
     dg->Display();
-
-    // 1.4.删除边
-    std::cout << std::endl << std::endl << "无向图删除边arc9：" << std::endl;
-//    dg->DeleteEdge(edge9);
-    dg->Display();
-//
-//    // 测试2：有向图
-//    std::cout << std::endl << "有向图：" << std::endl;
-//    GraphAdjList *dg = new GraphAdjList();
-//    dg->Init(vexs, edgesList);
-//    dg->Display();
-//    // 2.1.深度优先遍历
-//    std::cout << std::endl << "有向图深度优先遍历序列：（递归）" << std::endl;
-//    dg->Display_DFS_R(id0);
-//    std::cout << std::endl << "有向图深度优先遍历序列：（非递归）" << std::endl;
-//    dg->Display_DFS(id0);
-//    // 2.2.广度优先遍历
-//    std::cout << std::endl << "有向图广度优先遍历序列：" << std::endl;
-//    dg->Display_BFS(id1);
 
     return 0;
 }
